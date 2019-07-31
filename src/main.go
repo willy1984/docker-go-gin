@@ -1,55 +1,24 @@
 package main
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 
-	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/gin-gonic/gin"
+
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/sqlite"
 )
 
-var db *sql.DB
-var server = "backofficedb.database.windows.net"
-var port = 1433
-var user = "backoffice"
-var password = "D4t4c3nt3rCl0ud"
-var database = "backofficeDB"
-
-type Employee struct {
-	Id       int    `json:"id" binding:"required"`
-	Name     string `json:"name" binding:"required"`
-	Location string `json:"location" binding:"required"`
+// Product type
+type Product struct {
+	ID    uint   `json:”id”`
+	Code  string `json:”code”`
+	Price uint   `json:”price”`
 }
 
 func main() {
-	//Abrir conexion de base de datos
-	openConnection()
-	defineEndpointsAndRunApp()
-}
-func openConnection() {
-	// Build connection string
-	connString := fmt.Sprintf("server=%s;user id=%s;password=%s;port=%d;database=%s;",
-		server, user, password, port, database)
 
-	var err error
-
-	// Create connection pool
-	db, err = sql.Open("sqlserver", connString)
-	if err != nil {
-		log.Fatal("Error creating connection pool: ", err.Error())
-	}
-	ctx := context.Background()
-	err = db.PingContext(ctx)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	fmt.Printf("Connected!\n")
-}
-
-func defineEndpointsAndRunApp() {
 	r := gin.Default()
 
 	r.GET("/hello", func(c *gin.Context) {
@@ -80,55 +49,28 @@ func defineEndpointsAndRunApp() {
 		})
 	})
 
-	r.GET("/employees", GetEmployees)
+	r.GET("/products", GetProducts)
+
 	r.Run() // listen and serve on 0.0.0.0:8080
-
 }
 
-func GetEmployees(c *gin.Context) {
-	//Modificado para conectar con base de datos Microsoft SQL Server
+func GetProducts(c *gin.Context) {
 
-	// Read employees
-	var employees []Employee
-	count, err, employees := ReadEmployees()
+	db, err := gorm.Open("sqlite3", "test.db")
 	if err != nil {
-		log.Fatal("Error reading Employees: ", err.Error())
+		panic("failed to connect database")
 	}
-	c.JSON(http.StatusOK, employees)
-	fmt.Printf("Read %d row(s) successfully.\n", count)
+	defer db.Close()
+	db.AutoMigrate(&Product{})
 
-}
+	var products []Product
 
-func ReadEmployees() (int, error, []Employee) {
-	ctx := context.Background()
-	var employees []Employee
-	// Check if database is alive.
-	err := db.PingContext(ctx)
-	if err != nil {
-		return -1, err, employees
-	}
-
-	tsql := fmt.Sprintf("SELECT Id, Name, Location FROM SalesLT.Employees;")
-
-	// Execute query
-	rows, err := db.QueryContext(ctx, tsql)
-	if err != nil {
-		return -1, err, employees
+	if err := db.Find(&products).Error; err != nil {
+		c.AbortWithStatus(http.StatusInternalServerError)
+		log.Println(err)
+	} else {
+		c.JSON(http.StatusOK, products)
+		log.Println(products)
 	}
 
-	defer rows.Close()
-
-	var count int
-	// Iterate through the result set.
-	for rows.Next() {
-		var emp Employee
-		// Get values from row.
-		err := rows.Scan(&emp.Id, &emp.Name, &emp.Location)
-		if err != nil {
-			return -1, err, employees
-		}
-		employees = append(employees, emp)
-		count++
-	}
-	return count, nil, employees
 }
