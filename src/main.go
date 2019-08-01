@@ -12,11 +12,11 @@ import (
 )
 
 var db *sql.DB
-var server = "backofficedb.database.windows.net"
+var server = "35.226.5.182"
 var port = 1433
-var user = "backoffice"
-var password = "D4t4c3nt3rCl0ud"
-var database = "backofficeDB"
+var user = "root"
+var password = "1234"
+var database = "backoffice"
 
 type Employee struct {
 	Id       int    `json:"id" binding:"required"`
