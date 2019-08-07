@@ -1,21 +1,14 @@
 package main
 
 import (
-	"context"
+	
 	"database/sql"
 	"fmt"
-	"log"
 	"net/http"
-
-	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/gin-gonic/gin"
+	_"github.com/go-sql-driver/mysql"
 )
 
-var db *sql.DB
-var server = "35.226.5.182"
-var port = 1433
-var user = "root"
-var password = "1234"
 var database = "backoffice"
 
 type Employee struct {
@@ -24,111 +17,90 @@ type Employee struct {
 	Location string `json:"location" binding:"required"`
 }
 
-func main() {
-	//Abrir conexion de base de datos
-	openConnection()
-	defineEndpointsAndRunApp()
-}
-func openConnection() {
-	// Build connection string
-	connString := fmt.Sprintf("server=%s;user id=%s;password=%s;port=%d;database=%s;",
-		server, user, password, port, database)
-
-	var err error
-
-	// Create connection pool
-	db, err = sql.Open("sqlserver", connString)
-	if err != nil {
-		log.Fatal("Error creating connection pool: ", err.Error())
-	}
-	ctx := context.Background()
-	err = db.PingContext(ctx)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	fmt.Printf("Connected!\n")
-}
-
 func defineEndpointsAndRunApp() {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-
-	r.GET("/hello", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"greet": "hello, world!",
-		})
-	})
-
-	r.GET("/echo/:echo", func(c *gin.Context) {
-		echo := c.Param("echo")
-		c.JSON(http.StatusOK, gin.H{
-			"echo": echo,
-		})
-	})
-
-	r.POST("/upload", func(c *gin.Context) {
-		form, _ := c.MultipartForm()
-		files := form.File["upload[]"]
-
-		for _, file := range files {
-			log.Println(file.Filename)
-
-			// Upload the file to specific dst.
-			// c.SaveUploadedFile(file, dst)
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"uploaded": len(files),
-		})
-	})
 
 	r.GET("/employees", GetEmployees)
 	r.Run() // listen and serve on 0.0.0.0:8080
 
 }
 
-func GetEmployees(c *gin.Context) {
-	//Modificado para conectar con base de datos Microsoft SQL Server
-
+func GetEmployees(c *gin.Context){
 	// Read employees
 	var employees []Employee
-	count, err, employees := ReadEmployees()
-	if err != nil {
-		log.Fatal("Error reading Employees: ", err.Error())
-	}
+	employees, err := ReadEmpleados()	
 	c.JSON(http.StatusOK, employees)
-	fmt.Printf("Read %d row(s) successfully.\n", count)
+	fmt.Printf("Read %d row(s) successfully.\n", err)
 
 }
 
-func ReadEmployees() (int, error, []Employee) {
-	ctx := context.Background()
-	var employees []Employee
-	// Check if database is alive.
-	err := db.PingContext(ctx)
+func obtenerBaseDeDatos() (db *sql.DB, e error) {
+	usuario := "root"
+	pass := "1234"
+	host := "tcp(35.226.5.182:3306)"
+	nombreBaseDeDatos := "backoffice"
+	// Debe tener la forma usuario:contraseña@host/nombreBaseDeDatos
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@%s/%s", usuario, pass, host, nombreBaseDeDatos))
 	if err != nil {
-		return -1, err, employees
+		return nil, err
 	}
+	return db, nil
+}
 
-	tsql := fmt.Sprintf("SELECT Id, Name, Location FROM SalesLT.Employees;")
 
-	// Execute query
-	rows, err := db.QueryContext(ctx, tsql)
+func ReadEmpleados() ([]Employee, error) {
+	employees := []Employee{}
+	db, err := obtenerBaseDeDatos()
 	if err != nil {
-		return -1, err, employees
+		return nil, err
 	}
+	defer db.Close()
+	filas, err := db.Query("Select * from employees")
 
-	defer rows.Close()
+	if err != nil {
+		return nil, err
+	}
+	// Si llegamos aquí, significa que no ocurrió ningún error
+	defer filas.Close()
 
-	var count int
-	// Iterate through the result set.
-	for rows.Next() {
-		var emp Employee
-		// Get values from row.
-		err := rows.Scan(&emp.Id, &emp.Name, &emp.Location)
+	// Aquí vamos a "mapear" lo que traiga la consulta en el while de más abajo
+	var emp Employee
+
+	// Recorrer todas las filas, en un "while"
+	for filas.Next() {
+		err = filas.Scan(&emp.Id, &emp.Name, &emp.Location)
+		// Al escanear puede haber un error
 		if err != nil {
-			return -1, err, employees
+			return nil, err
 		}
+		// Y si no, entonces agregamos lo leído al arreglo
 		employees = append(employees, emp)
-		count++
 	}
-	return count, nil, employees
+	fmt.Printf("Conculta hecha correctamente")
+	// Vacío o no, regresamos el arreglo de contactos
+
+	
+	return employees, nil
+}
+
+func main() {
+	db, err := obtenerBaseDeDatos()
+	if err != nil {
+		fmt.Printf("Error obteniendo base de datos: %v", err)
+		return
+	}
+	// Terminar conexión al terminar función
+	defer db.Close()
+
+	// Ahora vemos si tenemos conexión
+	err = db.Ping()
+	if err != nil {
+		fmt.Printf("Error conectando: %v", err)
+		return
+	}
+	// Listo, aquí ya podemos usar a db!
+	fmt.Printf("Conectado correctamente")
+	defineEndpointsAndRunApp()
+	
 }
