@@ -67,7 +67,7 @@ func GetEmployees(c *gin.Context){
 func obtenerBaseDeDatos() (db *sql.DB, e error) {
 	usuario := "root"
 	pass := "1234"
-	host := "tcp(35.226.5.182:3306)"
+	host := "tcp(34.67.126.114:3306)"
 	nombreBaseDeDatos := "backoffice"
 	// Debe tener la forma usuario:contraseña@host/nombreBaseDeDatos
 	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@%s/%s", usuario, pass, host, nombreBaseDeDatos))
